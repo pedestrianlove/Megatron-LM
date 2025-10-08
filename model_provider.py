@@ -22,6 +22,45 @@ import megatron.legacy.model  # isort: skip
 
 # NOTE: Loading `megatron.legacy.model` earlier fails due to circular import
 
+# NVCOMP / Checkpoint #################################################
+# --- add near the top of pretrain_gpt.py ---
+from megatron.core.dist_checkpointing.strategies.base import (
+    register_default_strategy, StrategyAction,
+)
+from megatron.core.dist_checkpointing.serialization import (
+    get_default_save_sharded_strategy,  # optional sanity check
+)
+from megatron.core.dist_checkpointing.strategies.fully_parallel import FullyParallelSaveStrategyWrapper,FullyParallelLoadStrategyWrapper
+from megatron.core import parallel_state
+from megatron.core.utils import get_args
+
+# your GPU-compressing strategy (nvCOMP + optional GDS)
+from megatron.core.dist_checkpointing.strategies.nvcomp_torch_gds import NvcompTorchDistAsyncSave
+_NVCOMP_STRATEGY_INSTALLED = False
+def _maybe_register_nvcomp_strategy():
+    global _NVCOMP_STRATEGY_INSTALLED
+    if _NVCOMP_STRATEGY_INSTALLED:
+        return
+    args = get_args()
+    if not getattr(args, "use_dist_ckpt", False):
+        return
+
+    # Build your base torch_dist saver (version 1).
+    base = NvcompTorchDistAsyncSave(backend="torch_dist", version=1,
+                                    async_io=True,  # if your impl supports it
+                                    codec=args.ckpt_nvcomp_codec if hasattr(args, "ckpt_nvcomp_codec") else "gdeflate",
+                                    gds_prefer=getattr(args, "ckpt_use_gds", True))
+
+    # Optional but typical: keep “fully-parallel DP” semantics.
+    dp_group = parallel_state.get_data_parallel_group(with_context_parallel=False)
+    strategy = FullyParallelSaveStrategyWrapper(base, dp_group, getattr(args, "async_save", True))
+
+    # Make it the default for ('torch_dist', 1) SAVE_SHARDED so Megatron picks it up.
+    register_default_strategy(StrategyAction.SAVE_SHARDED, "torch_dist", 1, strategy)
+
+    _NVCOMP_STRATEGY_INSTALLED = True
+######################################################################
+
 
 def model_provider(
     model_builder: Callable, pre_process=True, post_process=True, vp_stage: Optional[int] = None
@@ -39,6 +78,7 @@ def model_provider(
     Returns:
         Union[GPTModel, megatron.legacy.model.GPTModel, MambaModel]: The returned model
     """
+    _maybe_register_nvcomp_strategy()
     args = get_args()
 
     if has_nvidia_modelopt and modelopt_args_enabled(args):  # [ModelOpt]
