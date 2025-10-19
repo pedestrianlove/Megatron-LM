@@ -1,7 +1,7 @@
 # megatron/core/dist_checkpointing/strategies/nvcomp_torch_gds.py
 import os
 import torch
-import nvcomp
+from nvidia import nvcomp
 from torch.utils.dlpack import from_dlpack
 from megatron.core.dist_checkpointing.serialization import (
     get_default_save_sharded_strategy,
@@ -16,7 +16,7 @@ class NvcompTorchDistAsyncSave(AsyncSaveShardedStrategy):
     """
 
     def __init__(self, codec_name="deflate", codec_opts=None, use_gds=True):
-        super().__init__()
+        super().__init__(backend="torch_dist", version=1)
         self._inner = get_default_save_sharded_strategy(backend="torch_dist", version=1)
         self._use_gds = use_gds and hasattr(torch.cuda, "gds")
         # Build an nvCOMP codec; you can pass algorithm/level knobs via codec_opts

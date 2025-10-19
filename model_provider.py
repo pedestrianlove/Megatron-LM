@@ -32,7 +32,6 @@ from megatron.core.dist_checkpointing.serialization import (
 )
 from megatron.core.dist_checkpointing.strategies.fully_parallel import FullyParallelSaveStrategyWrapper,FullyParallelLoadStrategyWrapper
 from megatron.core import parallel_state
-from megatron.core.utils import get_args
 
 # your GPU-compressing strategy (nvCOMP + optional GDS)
 from megatron.core.dist_checkpointing.strategies.nvcomp_torch_gds import NvcompTorchDistAsyncSave
@@ -46,10 +45,7 @@ def _maybe_register_nvcomp_strategy():
         return
 
     # Build your base torch_dist saver (version 1).
-    base = NvcompTorchDistAsyncSave(backend="torch_dist", version=1,
-                                    async_io=True,  # if your impl supports it
-                                    codec=args.ckpt_nvcomp_codec if hasattr(args, "ckpt_nvcomp_codec") else "gdeflate",
-                                    gds_prefer=getattr(args, "ckpt_use_gds", True))
+    base = NvcompTorchDistAsyncSave(codec_name="deflate", codec_opts=None, use_gds=True)
 
     # Optional but typical: keep “fully-parallel DP” semantics.
     dp_group = parallel_state.get_data_parallel_group(with_context_parallel=False)
