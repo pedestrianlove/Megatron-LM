@@ -34,7 +34,7 @@ from megatron.core.dist_checkpointing.strategies.fully_parallel import FullyPara
 from megatron.core import parallel_state
 
 # your GPU-compressing strategy (nvCOMP + optional GDS)
-from megatron.core.dist_checkpointing.strategies.nvcomp_torch_gds import NvcompTorchDistAsyncSave
+from megatron.core.dist_checkpointing.strategies.nvcomp_torch_gds import NvcompTorchDistAsyncSave, NvcompTorchDistLoadShardedStrategy
 _NVCOMP_STRATEGY_INSTALLED = False
 def _maybe_register_nvcomp_strategy():
     global _NVCOMP_STRATEGY_INSTALLED
@@ -53,6 +53,9 @@ def _maybe_register_nvcomp_strategy():
 
     # Make it the default for ('torch_dist', 1) SAVE_SHARDED so Megatron picks it up.
     register_default_strategy(StrategyAction.SAVE_SHARDED, "torch_dist", 1, strategy)
+
+    # Also register the matching LOAD_SHARDED strategy so resumes work.
+    register_default_strategy(StrategyAction.LOAD_SHARDED, "torch_dist", 1, NvcompTorchDistLoadShardedStrategy())
 
     _NVCOMP_STRATEGY_INSTALLED = True
 ######################################################################
